@@ -10,6 +10,8 @@ from langchain_community.vectorstores import FAISS
 from langchain_community.chat_models import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 from rank_bm25 import BM25Okapi
+from langchain.llms import Ollama
+
 
 class ContextualRetrieval:
 
@@ -21,13 +23,20 @@ class ContextualRetrieval:
             chunk_overlap=100,
         )
         self.embeddings = OpenAIEmbeddings()
-        self.llm = ChatOpenAI(
-            model_name="gpt-4o", 
-            temperature=0,
-            #max_token=None,
-            timeout=None,
-            max_retries=2,
-        )
+        self.llm = Ollama(
+    model="llama3.2",
+    temperature=0,
+#    timeout=None,
+#    max_retries=2,
+)
+
+#        self.llm = ChatOpenAI(
+#            model_name="gpt-4o", 
+#            temperature=0,
+#            #max_token=None,
+#            timeout=None,
+#            max_retries=2,
+#        )
 
     def process_document(self, document: str) -> Tuple[List[Document], List[Document]]:
         chunks = self.text_splitter.create_documents([document])
@@ -72,7 +81,8 @@ class ContextualRetrieval:
         """)
         messages = prompt.format_messages(document=document, chunk=chunk)
         response = self.llm.invoke(messages)
-        return response.content
+#        return response.content
+        return response
     
     def create_vectorstores(self, chunks: List[Document]) -> FAISS:
         return FAISS.from_documents(chunks, self.embeddings)
@@ -344,6 +354,4 @@ generation platform.
 
     original_chunks, contextualized_chunks = cr.process_document(document)
     
-    len(contextualized_chunks)
-
     print(original_chunks[0])
