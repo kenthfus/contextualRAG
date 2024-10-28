@@ -5,7 +5,8 @@ from typing import List, Tuple
 from dotenv import load_dotenv
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.schema import Document
-from langchain_community.embeddings import OpenAIEmbeddings
+# from langchain_community.embeddings import OpenAIEmbeddings
+from langchain.embeddings import OllamaEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_community.chat_models import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
@@ -22,7 +23,8 @@ class ContextualRetrieval:
             chunk_size=800,
             chunk_overlap=100,
         )
-        self.embeddings = OpenAIEmbeddings()
+        # self.embeddings = OpenAIEmbeddings()
+        self.embeddings = OllamaEmbeddings(model="llama3.2")
         self.llm = Ollama(
     model="llama3.2",
     temperature=0,
@@ -110,7 +112,8 @@ class ContextualRetrieval:
         """)
         messages = prompt.format_messages(query=query, chunks="\n\n".join(relevant_chunks))
         response = self.llm.invoke(messages)
-        return response.content
+        # return response.content
+        return response
     
 # example usage of the main function
 if __name__ == "__main__":
@@ -355,3 +358,71 @@ generation platform.
     original_chunks, contextualized_chunks = cr.process_document(document)
     
     print(original_chunks[0])
+
+    original_vectorstore = cr.create_vectorstores(original_chunks)
+    contextualized_vectorstore = cr.create_vectorstores(contextualized_chunks)
+
+    original_bm25_index = cr.create_bm25_index(original_chunks)
+    contextualized_bm25_index = cr.create_bm25_index(contextualized_chunks)
+
+    cache_key = cr.generate_cache_key(document)
+    
+    print(f"Processed {len(original_chunks)} chunks")
+    print(f"Cache key for the document: {cache_key}")
+
+
+    queries = ["What is the total revenue in Q3 2023? what was the gross profit and cash position?",
+               "How does the automotive gross margin in Q3 2023 compare to the previous year?",
+               "What is the Tesla's debt-to-equity ratio?",
+            "How much did Tesla invest in R&D during Q3 2023",
+            "What is Tesla's market share in the global EV market for Q3 2023?"]
+    
+    for query in queries:
+        original_vector_results = original_vectorstore.similarity_search(query, k=3)
+
+        contextualized_vector_results = contextualized_vectorstore.similarity_search(query, k=3)
+
+        original_tokenized_query = query.split()
+        original_bm25_results = original_bm25_index.get_top_n(original_tokenized_query, original_chunks, n=3)
+
+        contextualized_tokenized_query = query.split()
+        contextualized_bm25_results = contextualized_bm25_index.get_top_n(contextualized_tokenized_query, contextualized_chunks, n=3)
+
+        # generate answer
+        original_vector_answer = cr.generate_answer(query, [doc.page_content for doc in original_vector_results])
+        contextualized_vector_answer = cr.generate_answer(query, [doc.page_content for doc in contextualized_vector_results])
+        original_bm25_answer = cr.generate_answer(query, [doc.page_content for doc in original_bm25_results])
+        contextualized_bm25_answer = cr.generate_answer(query, [doc.page_content for doc in contextualized_bm25_results])
+
+        print("\nOriginal Vector Search Results:")
+        for i, doc in enumerate(original_vector_results, 1):
+            print(f"Result {i}: {doc.page_content[:200]}...")
+
+        print("\nOriginal Vector Search Answer:")
+        print(original_vector_answer)
+        print("\n" + "-"*50 + "\n")
+
+        print("\nContextualized Vector Search Results:")
+        for i, doc in enumerate(contextualized_vector_results, 1):
+            print(f"Result {i}: {doc.page_content[:200]}...")
+
+        print("\nContextualized Vector Search Answer:")
+        print(contextualized_vector_answer)
+        print("\n" + "-"*50 + "\n")
+
+        print("\nOriginal BM25 Search Results:")
+        for i, doc in enumerate(original_bm25_results, 1):
+            print(f"Result {i}: {doc.page_content[:200]}...")
+
+        print("\nOriginal BM25 Search Answer:")
+        print(original_bm25_answer)
+        print("\n" + "-"*50 + "\n")
+
+        print("\nContextualized BM25 Search Results:")
+        for i, doc in enumerate(contextualized_bm25_results, 1):
+            print(f"Result {i}: {doc.page_content[:200]}...")
+
+        print("\nContextualized BM25 Search Answer:")
+        print(contextualized_bm25_answer)
+        print("\n" + "-"*50 + "\n")
+
